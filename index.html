@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Χάρτης Ηλεκτροφωτισμού Οδικού Δικτύου Π.Ε. Λέσβου</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  >
+
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+	#zoom-message {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.35);
+}
+#welcome-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(245, 248, 250, 0.97);
+  font-family: Arial, sans-serif;
+}
+
+.welcome-card {
+  text-align: center;
+  max-width: 560px;
+  padding: 35px 45px;
+}
+
+.welcome-logo {
+  width: 260px;
+  max-width: 80%;
+  height: auto;
+  margin-bottom: 25px;
+}
+
+.welcome-text {
+  font-size: 22px;
+  margin-bottom: 12px;
+  color: #444;
+}
+
+.welcome-card h1 {
+  margin: 0 0 30px 0;
+  font-size: 28px;
+  line-height: 1.3;
+  color: #173f73;
+}
+
+#show-map-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 12px 28px;
+  font-size: 17px;
+  font-weight: bold;
+  cursor: pointer;
+  background: #1f4f8a;
+  color: white;
+}
+
+#show-map-btn:hover {
+  background: #163b69;
+}
+  </style>
+</head>
+
+<body>
+
+<div id="welcome-screen">
+  <div class="welcome-card">
+    <img
+      src="images/logo_perifereia.svg"
+      alt="Περιφέρεια Βορείου Αιγαίου"
+      class="welcome-logo"
+    >
+
+    <div class="welcome-text">Καλώς ήρθατε</div>
+
+    <h1>
+      Χάρτης Ηλεκτροφωτισμού<br>
+      Οδικού Δικτύου Π.Ε. Λέσβου
+    </h1>
+
+    <button id="show-map-btn">Προβολή χάρτη</button>
+  </div>
+</div>
+
+  <div id="map"></div>
+  <div id="zoom-message">
+  🔍 Μεγεθύνετε τον χάρτη για να εμφανιστούν τα σημεία οδοφωτισμού.<br>
+  Επιλέξτε ένα σημείο για προβολή των χαρακτηριστικών και της περιγραφής του.
+</div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+  </script>
+
+  <script>
+    const map = L.map('map').setView([39.18, 26.30], 10);
+
+    L.tileLayer(
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }
+    ).addTo(map);
+	let lightsLayer;
+	fetch('data/lights.geojson')
+  .then(response => response.json())
+  .then(data => {
+    lightsLayer = L.geoJSON(data, {
+
+      pointToLayer: function (feature, latlng) {
+        return L.circleMarker(latlng, {
+          radius: 4,
+		  color: '#5a0000',
+    fillColor: '#d7191c',
+          fillOpacity: 0.9,
+          weight: 1
+        });
+      },
+
+      onEachFeature: function (feature, layer) {
+        const p = feature.properties;
+
+        const popupContent = `
+          <div style="min-width:220px;">
+            <b>Σημείο οδοφωτισμού</b><br><br>
+
+            <b>ID:</b> ${p.ID ?? '-'}<br>
+            <b>Κόμβος:</b> ${p['Κόμβος'] ?? '-'}<br>
+            <b>Περιγραφή:</b> ${p['Περιγραφή'] ?? '-'}<br><br>
+
+            <b>Γεωγραφικό Πλάτος:</b> 
+            ${p.Latitude != null ? Number(p.Latitude).toFixed(6) : '-'}<br>
+
+            <b>Γεωγραφικό Μήκος:</b> 
+            ${p.Longitude != null ? Number(p.Longitude).toFixed(6) : '-'}<br><br>
+
+            <b>Χ ΕΓΣΑ87:</b> 
+            ${p.x_egsa87 != null ? Number(p.x_egsa87).toFixed(3) : '-'}<br>
+
+            <b>Υ ΕΓΣΑ87:</b> 
+            ${p.y_egsa87 != null ? Number(p.y_egsa87).toFixed(3) : '-'}
+          </div>
+        `;
+
+        layer.bindPopup(popupContent);
+      }
+
+    }).addTo(map);
+
+    map.fitBounds(lightsLayer.getBounds());
+	updateLightsVisibility();
+  })
+  .catch(error => {
+    console.error('Σφάλμα φόρτωσης lights.geojson:', error);
+  });
+  
+  function updateLightsVisibility() {
+  if (!lightsLayer) return;
+
+  const zoom = map.getZoom();
+  const message = document.getElementById('zoom-message');
+
+  if (zoom >= 12) {
+    if (!map.hasLayer(lightsLayer)) {
+      map.addLayer(lightsLayer);
+    }
+
+    message.style.display = 'none';
+
+  } else {
+    if (map.hasLayer(lightsLayer)) {
+      map.removeLayer(lightsLayer);
+    }
+
+    message.style.display = 'block';
+  }
+}
+
+map.on('zoomend', updateLightsVisibility);
+
+document.getElementById('show-map-btn').addEventListener('click', function () {
+  document.getElementById('welcome-screen').style.display = 'none';
+  map.invalidateSize();
+});
+  </script>
+
+</body>
+</html>
